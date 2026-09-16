@@ -1,0 +1,13 @@
+# Diagnostic Troubleshooting Matrix
+
+| Symptom / Observation | Root Cause | Corrective Action |
+| :--- | :--- | :--- |
+| **Bind fails: address already in use** | Another GCS (QGroundControl, Mission Planner, MAVProxy) owns the port | Run `mavlink-doctor` without arguments to see socket owners, terminate the conflicting process, or choose another `-port`. |
+| **No local interface in target subnet** | Network adapter disconnected, IP unassigned, or Wi-Fi connected to wrong SSID | Assign a static IPv4 on your host adapter in the device subnet (e.g. `192.168.144.20/24`). |
+| **Raw UDP packets arrive, but no MAVLink decoded** | Serial-over-UDP chunk fragmentation! Air unit is splitting frames across packet boundaries | Run with `-stream-server=true` in server mode or use UDP client mode (`-transport udp -mode client -address <ip>:<port>`). |
+| **Channel opens, but zero frames arrive** | Firewall blocking UDP or device not routing to PC | Check routing with `mavlink-doctor -address <ip>:<port>` and run `sudo tcpdump -ni any udp port <port>`. |
+| **Frames decode, but no HEARTBEAT** | Telemetry stream from non-autopilot component or heartbeats disabled in autopilot | Verify autopilot `TELEM1_STREAM` parameters and run with `-dialect all`. |
+| **Heartbeat appears once only** | Link dropped or device requires active GCS heartbeat to maintain output | Ensure `-gcs-heartbeat=true` (default) is enabled. |
+| **High packet loss / jitter reported** | Poor RF signal, baud rate mismatch, or buffer overflows | Check radio RSSI/SNR; verify serial baud matches flight controller `SERIALx_BAUD`. |
+| **Gimbal not detected** | Gimbal is silent until commanded or routed through custom CAN bus | Increase test duration (`-listen 30`) or enable stream requests (`-request-streams=true`). |
+| **Serial device cannot be opened** | Permission denied or device busy | Add user to `dialout` group: `sudo usermod -aG dialout $USER` and check for modem-manager conflicts. |
