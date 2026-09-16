@@ -32,6 +32,7 @@ type Config struct {
 	SkipGomavlib   bool
 	ShowVersion    bool
 	JSONOutput     bool
+	Verbose        bool
 	ExportReport   string
 	RedactReport   bool
 	ProbeSubnet    string
@@ -56,8 +57,11 @@ func ParseFlags(args []string) (*Config, error) {
 	skipGomavlib := fs.Bool("no-gomavlib", false, "Skip MAVLink frame decoding and run raw transport tests only")
 	showVersion := fs.Bool("version", false, "Print version information and exit")
 	jsonOutput := fs.Bool("json", false, "Emit output in machine-readable JSON format")
-	exportReport := fs.String("export-report", "", "Save detailed diagnostic support report to specified JSON file path")
-	redactReport := fs.Bool("redact", false, "Redact sensitive IP and MAC addresses in exported support report")
+	verbose := fs.Bool("v", false, "Verbose output: print detailed frame logs and socket tables")
+	fs.BoolVar(verbose, "verbose", false, "Verbose output (alias for -v)")
+	exportReport := fs.String("report", "mavlink-doctor-report.json", "Save full diagnostic report to JSON file ('none' to disable)")
+	fs.StringVar(exportReport, "export-report", "mavlink-doctor-report.json", "Alias for -report")
+	redactReport := fs.Bool("redact", false, "Redact sensitive IP and MAC addresses in exported report")
 	probeSubnet := fs.String("probe-subnet", "", "Opt-in bounded subnet probe for active MAVLink endpoints (e.g. 192.168.1.0/24)")
 
 	fs.Usage = func() {
@@ -117,6 +121,11 @@ func ParseFlags(args []string) (*Config, error) {
 		dur = 10 * time.Second
 	}
 
+	repFile := strings.TrimSpace(*exportReport)
+	if strings.ToLower(repFile) == "none" || strings.ToLower(repFile) == "off" || strings.ToLower(repFile) == "false" {
+		repFile = ""
+	}
+
 	return &Config{
 		ListenDuration: dur,
 		ListenAddress:  *listenAddress,
@@ -133,7 +142,8 @@ func ParseFlags(args []string) (*Config, error) {
 		SkipGomavlib:   *skipGomavlib,
 		ShowVersion:    *showVersion,
 		JSONOutput:     *jsonOutput,
-		ExportReport:   strings.TrimSpace(*exportReport),
+		Verbose:        *verbose,
+		ExportReport:   repFile,
 		RedactReport:   *redactReport,
 		ProbeSubnet:    strings.TrimSpace(*probeSubnet),
 	}, nil

@@ -39,18 +39,13 @@ func main() {
 
 	if !cfg.JSONOutput {
 		cli.PrintBanner()
-		fmt.Printf("OS/Arch       : %s/%s\n", runtime.GOOS, runtime.GOARCH)
-		fmt.Printf("Transport     : %s (mode: %s)\n", cfg.Transport, cfg.Mode)
 		if cfg.Address != "" {
-			fmt.Printf("Remote Target : %s\n", cfg.Address)
+			fmt.Printf("Target: %s %s %s | Dialect: %s | Duration: %s\n",
+				cfg.Transport, cfg.Mode, cfg.Address, cfg.Dialect, cfg.ListenDuration)
 		} else {
-			fmt.Printf("Local Bind    : %s:%d\n", cfg.ListenAddress, cfg.Port)
+			fmt.Printf("Target: %s %s %s:%d | Dialect: %s | Duration: %s\n",
+				cfg.Transport, cfg.Mode, cfg.ListenAddress, cfg.Port, cfg.Dialect, cfg.ListenDuration)
 		}
-		if cfg.SerialDevice != "" {
-			fmt.Printf("Serial Device : %s @ %d baud\n", cfg.SerialDevice, cfg.Baud)
-		}
-		fmt.Printf("Dialect       : %s\n", cfg.Dialect)
-		fmt.Printf("GCS Heartbeat : %t | Stream Requests: %t\n", cfg.GCSHeartbeat, cfg.RequestStreams)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -67,77 +62,42 @@ func main() {
 	if err == nil {
 		discReport.Interfaces = ifaces
 	}
-	if !cfg.JSONOutput {
-		reporter.PrintInterfaces(discReport.Interfaces)
-	}
 
 	sockets, _ := discovery.ScanUDPSockets()
 	discReport.UDPSockets = sockets
-	if !cfg.JSONOutput {
-		reporter.PrintSockets(discReport.UDPSockets, discReport.Interfaces)
-	}
 
 	if cfg.Address != "" {
 		route, _ := discovery.CheckRouting(cfg.Address)
 		discReport.Route = route
-		if !cfg.JSONOutput {
-			reporter.PrintRouting(discReport.Route)
-		}
-	} else if !cfg.JSONOutput {
-		reporter.PrintRouting(nil)
 	}
 
 	if cfg.Transport == "auto" || cfg.Transport == "udp" {
 		portStatus := discovery.CheckPort(cfg.ListenAddress, cfg.Port, discReport.UDPSockets)
 		discReport.PortStatus = &portStatus
-		if !cfg.JSONOutput {
-			reporter.PrintPortStatus(portStatus)
-		}
 	}
 
 	discReport.SerialCandidates = discovery.SerialCandidates()
-	if !cfg.JSONOutput {
-		reporter.PrintSerialCandidates(discReport.SerialCandidates)
-	}
 
 	if cfg.ProbeSubnet != "" {
-		if !cfg.JSONOutput {
-			reporter.Section("SUBNET ACTIVE PROBE")
-			fmt.Printf("Probing subnet %s for active MAVLink endpoints on port %d...\n", cfg.ProbeSubnet, cfg.Port)
-		}
 		probed, probeErr := discovery.ProbeSubnet(cfg.ProbeSubnet, cfg.Port, 254)
 		if probeErr == nil {
 			discReport.SubnetProbe = probed
-			if !cfg.JSONOutput {
-				if len(probed) > 0 {
-					reporter.Ok(fmt.Sprintf("Discovered %d active UDP endpoint(s):", len(probed)))
-					for _, p := range probed {
-						reporter.Info(p)
-					}
-				} else {
-					reporter.Info("No responding hosts found on target subnet.")
-				}
-			}
-		} else if !cfg.JSONOutput {
-			reporter.Warn(fmt.Sprintf("Subnet probe error: %v", probeErr))
 		}
 	}
 
-	// 2. Raw UDP Sniffer (if applicable)
+	if !cfg.JSONOutput {
+		reporter.PrintDiscoverySummary(discReport.Interfaces, discReport.PortStatus, discReport.SerialCandidates, discReport.Route, cfg.Verbose)
+	}
+
+	// 2. Raw UDP Sniffer (if applicable in local server mode)
 	var rawSummary *transport.PacketSummary
 	if (cfg.Transport == "auto" || cfg.Transport == "udp") && cfg.Address == "" {
-		if !cfg.JSONOutput {
-			reporter.Section("6. RAW UDP PACKET SNIFFER")
-			fmt.Printf("Listening for raw UDP packets on %s:%d for %s...\n",
-				cfg.ListenAddress, cfg.Port, cfg.ListenDuration)
-		}
-
 		rawSummary, _ = transport.ListenRawUDP(cfg.ListenDuration, cfg.ListenAddress, cfg.Port,
 			func(ts time.Time, remoteAddr string, bytesReceived int, hexPreview string, isMavlink bool) {
-				if !cfg.JSONOutput {
+				if cfg.Verbose && !cfg.JSONOutput {
 					mavStr := "Non-MAVLink"
 					if isMavlink {
-						mavStr = "MAVLink magic found"
+						mavStr = "MAVLink magic"
 					}
 					fmt.Printf("[%s] %-21s | %4d B | %s | %s\n",
 						ts.Format("15:04:05.000"), remoteAddr, bytesReceived, hexPreview, mavStr)
@@ -146,7 +106,7 @@ func main() {
 		)
 
 		if !cfg.JSONOutput && rawSummary != nil {
-			reporter.PrintRawPacketSummary(rawSummary)
+			reporter.PrintRawPacketSummary(rawSummary, cfg.Verbose)
 		}
 	}
 
@@ -162,20 +122,20 @@ func main() {
 	metricsSnapshot := tracker.Snapshot()
 	result := reporter.BuildResult(discReport, rawSummary, metricsSnapshot, gimbalEvidence)
 
-	if cfg.JSONOutput {
-		_ = reporter.PrintJSON(result)
-	} else {
-		reporter.PrintMAVLinkSummary(metricsSnapshot, gimbalEvidence)
-		reporter.PrintFinalRecommendation(cfg.Port)
-	}
-
 	if cfg.ExportReport != "" {
 		if err := reporter.ExportSupportReport(cfg.ExportReport, result, cfg.RedactReport); err != nil {
 			if !cfg.JSONOutput {
-				reporter.Fail(fmt.Sprintf("Failed to export support report: %v", err))
+				reporter.Fail(fmt.Sprintf("Failed to export report: %v", err))
 			}
-		} else if !cfg.JSONOutput {
-			reporter.Ok(fmt.Sprintf("Exported diagnostic support report to %s (Redacted: %t)", cfg.ExportReport, cfg.RedactReport))
+		}
+	}
+
+	if cfg.JSONOutput {
+		_ = reporter.PrintJSON(result)
+	} else {
+		reporter.PrintMAVLinkSummary(metricsSnapshot, gimbalEvidence, cfg.ExportReport, cfg.Verbose)
+		if metricsSnapshot.TotalFrames == 0 {
+			reporter.PrintFinalRecommendation(cfg.Port)
 		}
 	}
 }
@@ -249,12 +209,13 @@ func runMavlinkTest(ctx context.Context, cfg *cli.Config, tracker *metrics.Track
 	defer node.Close()
 
 	if !cfg.JSONOutput {
-		reporter.Section("7. MAVLINK LIVE DECODER & TELEMETRY MONITOR")
-		reporter.Ok(fmt.Sprintf("Listening for MAVLink events via %s %s endpoint...", selTransport, selMode))
+		reporter.PrintLiveStart(selTransport, selMode, cfg.Port, cfg.Address)
 	}
 
 	testTimer := time.NewTimer(cfg.ListenDuration)
 	defer testTimer.Stop()
+
+	announcedSources := make(map[string]bool)
 
 	for {
 		select {
@@ -268,17 +229,18 @@ func runMavlinkTest(ctx context.Context, cfg *cli.Config, tracker *metrics.Track
 			}
 			switch e := evt.(type) {
 			case *gomavlib.EventChannelOpen:
-				if !cfg.JSONOutput {
+				if cfg.Verbose && !cfg.JSONOutput {
 					reporter.Ok(fmt.Sprintf("Transport channel opened: %s", e.Channel))
 				}
 			case *gomavlib.EventFrame:
 				verStr := decoder.FrameVersion(e.Frame)
-				approxBytes := 12 // minimal header size + message estimate
+				approxBytes := 12
 				msg := e.Message()
 				sysID := e.SystemID()
 				compID := e.ComponentID()
+				srcKey := fmt.Sprintf("%d/%d", sysID, compID)
 
-				sm := tracker.RecordFrame(e.Frame, verStr, approxBytes)
+				tracker.RecordFrame(e.Frame, verStr, approxBytes)
 				decoder.CheckGimbalMessage(msg, sysID, compID, gimbalEvidence)
 
 				if hb, isHB := msg.(*common.MessageHeartbeat); isHB {
@@ -287,27 +249,33 @@ func runMavlinkTest(ctx context.Context, cfg *cli.Config, tracker *metrics.Track
 					statStr := decoder.SystemStatusName(uint8(hb.SystemStatus))
 					tracker.RecordHeartbeat(sysID, compID, apStr, vehStr, statStr)
 
-					if !cfg.JSONOutput {
-						reporter.Ok(fmt.Sprintf("[%s] HEARTBEAT from sys=%d comp=%d | %s | %s | %s",
-							time.Now().Format("15:04:05.000"), sysID, compID, apStr, vehStr, statStr))
+					if !announcedSources[srcKey] && !cfg.JSONOutput {
+						announcedSources[srcKey] = true
+						reporter.Ok(fmt.Sprintf("[%s] Online sys=%d comp=%d : %s (%s)",
+							time.Now().Format("15:04:05"), sysID, compID, vehStr, statStr))
 					}
-				} else if !cfg.JSONOutput && (sm.TotalFrames <= 10 || sm.TotalFrames%20 == 0) {
+				} else if !announcedSources[srcKey] && !cfg.JSONOutput {
+					announcedSources[srcKey] = true
+					reporter.Ok(fmt.Sprintf("[%s] Telemetry sys=%d comp=%d : Active (%s)",
+						time.Now().Format("15:04:05"), sysID, compID, decoder.ComponentName(compID)))
+				}
+
+				if cfg.Verbose && !cfg.JSONOutput {
 					fmt.Printf("[%s] FRAME sys=%d comp=%d seq=%-3d ver=%s msg=%T\n",
 						time.Now().Format("15:04:05.000"), sysID, compID, e.Frame.GetSequenceNumber(), verStr, msg)
 				}
 			case *gomavlib.EventParseError:
 				tracker.RecordParseError()
-				if !cfg.JSONOutput {
-					reporter.Warn(fmt.Sprintf("[%s] Parse error on channel %s: %v",
-						time.Now().Format("15:04:05.000"), e.Channel, e.Error))
+				if cfg.Verbose && !cfg.JSONOutput {
+					reporter.Warn(fmt.Sprintf("[%s] Parse error: %v", time.Now().Format("15:04:05.000"), e.Error))
 				}
 			case *gomavlib.EventStreamRequested:
-				if !cfg.JSONOutput {
-					reporter.Info(fmt.Sprintf("Sent data stream request to system=%d component=%d", e.SystemID, e.ComponentID))
+				if cfg.Verbose && !cfg.JSONOutput {
+					reporter.Info(fmt.Sprintf("Stream request sent to sys=%d comp=%d", e.SystemID, e.ComponentID))
 				}
 			case *gomavlib.EventChannelClose:
-				if !cfg.JSONOutput {
-					reporter.Warn(fmt.Sprintf("Transport channel closed: %v", e.Error))
+				if cfg.Verbose && !cfg.JSONOutput {
+					reporter.Warn(fmt.Sprintf("Channel closed: %v", e.Error))
 				}
 			}
 		}

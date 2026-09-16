@@ -47,8 +47,8 @@ func CheckGimbalMessage(msg message.Message, sysID, compID uint8, evidence *Gimb
 		evidence.SystemID = sysID
 		evidence.ComponentID = compID
 		evidence.GimbalType = "MAVLink v2 Gimbal Protocol v2"
-		evidence.Details = fmt.Sprintf("Gimbal device attitude reported (target sys=%d comp=%d flags=0x%X)",
-			typed.TargetSystem, typed.TargetComponent, typed.Flags)
+		evidence.Details = fmt.Sprintf("Gimbal device attitude reported (target sys=%d comp=%d)",
+			typed.TargetSystem, typed.TargetComponent)
 		appendUnique(&evidence.MessagesSeen, "GIMBAL_DEVICE_ATTITUDE_STATUS")
 
 	case *common.MessageGimbalDeviceInformation:

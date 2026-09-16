@@ -19,6 +19,8 @@ type Tracker struct {
 	versionCounts    map[string]uint64
 	messageCounts    map[string]uint64
 	sources          map[EndpointKey]*SourceMetrics
+	sysLastSeq       map[uint8]uint8
+	sysHasSeq        map[uint8]bool
 }
 
 // NewTracker initializes a new telemetry metrics tracker.
@@ -28,6 +30,8 @@ func NewTracker() *Tracker {
 		versionCounts: make(map[string]uint64),
 		messageCounts: make(map[string]uint64),
 		sources:       make(map[EndpointKey]*SourceMetrics),
+		sysLastSeq:    make(map[uint8]uint8),
+		sysHasSeq:     make(map[uint8]bool),
 	}
 }
 
@@ -72,12 +76,12 @@ func (t *Tracker) RecordFrame(fr frame.Frame, versionStr string, approxBytes int
 	sm.TotalBytes += uint64(approxBytes)
 	sm.LastSeen = now
 
-	// Sequence gap & packet loss tracking (sequence numbers are 0-255 modulo 256)
+	// Sequence gap & packet loss tracking across the link channel for this system
 	currentSeq := fr.GetSequenceNumber()
-	if sm.HasLastSeq {
-		expectedSeq := byte((int(sm.LastSeq) + 1) % 256)
+	if t.sysHasSeq[sysID] {
+		expectedSeq := byte((int(t.sysLastSeq[sysID]) + 1) % 256)
 		if currentSeq != expectedSeq {
-			diff := (256 + int(currentSeq) - int(sm.LastSeq) - 1) % 256
+			diff := (256 + int(currentSeq) - int(t.sysLastSeq[sysID]) - 1) % 256
 			sm.DroppedFrames += uint64(diff)
 		}
 
@@ -98,6 +102,9 @@ func (t *Tracker) RecordFrame(fr frame.Frame, versionStr string, approxBytes int
 	sm.LastSeq = currentSeq
 	sm.HasLastSeq = true
 	sm.LastArrivalTime = now
+
+	t.sysLastSeq[sysID] = currentSeq
+	t.sysHasSeq[sysID] = true
 
 	// Total expected = received + dropped
 	totalExpected := sm.TotalFrames + sm.DroppedFrames

@@ -38,226 +38,238 @@ func Info(msg string) {
 	fmt.Printf("   %s\n", msg)
 }
 
-// PrintInterfaces outputs scanned network interfaces.
-func PrintInterfaces(ifaces []discovery.InterfaceInfo) {
-	Section("1. NETWORK INTERFACES")
-	if len(ifaces) == 0 {
-		Warn("No network interfaces discovered.")
-		return
-	}
+// PrintDiscoverySummary outputs a concise, non-bloated environment summary.
+func PrintDiscoverySummary(ifaces []discovery.InterfaceInfo, portStatus *discovery.PortStatus, serialCandidates []string, route *discovery.RouteResult, verbose bool) {
+	fmt.Println("\n[1/3] Environment & Discovery")
 
-	for _, iface := range ifaces {
-		fmt.Printf("\nInterface: %s (Index: %d, MTU: %d, Flags: %s)\n",
-			iface.Name, iface.Index, iface.MTU, iface.Flags)
-		for _, addr := range iface.Addresses {
-			fmt.Printf("  Address: %s\n", addr)
-		}
-		for _, ip := range iface.IPv4Bind {
-			Ok(fmt.Sprintf("IPv4 candidate: %s on %s", ip, iface.Name))
-		}
-	}
-}
-
-// PrintSockets outputs discovered UDP sockets.
-func PrintSockets(sockets []discovery.SocketInfo, ifaces []discovery.InterfaceInfo) {
-	Section("2. LOCAL IP ADDRESSES & UDP SOCKETS")
+	// 1. IP Candidates
+	var ips []string
 	for _, iface := range ifaces {
 		for _, ip := range iface.IPv4Bind {
-			fmt.Printf("Local UDP bind candidate: %-15s (%s)\n", ip, iface.Name)
+			ips = append(ips, fmt.Sprintf("%s (%s)", ip, iface.Name))
 		}
 	}
-	fmt.Println()
-	if len(sockets) == 0 {
-		Info("No active UDP sockets detected or host tools unavailable.")
-		return
-	}
-	for _, s := range sockets {
-		fmt.Printf("UDP socket: %-22s -> %-22s %s\n", s.LocalAddr, s.ForeignAddr, s.Process)
-	}
-}
-
-// PrintRouting outputs route table and ICMP reachability results.
-func PrintRouting(route *discovery.RouteResult) {
-	Section("3. NETWORK REACHABILITY & ROUTE")
-	if route == nil {
-		Info("No remote destination supplied; routing and reachability checks skipped.")
-		return
-	}
-
-	fmt.Printf("Target destination : %s:%s\n", route.TargetHost, route.TargetPort)
-	if route.RouteOutput != "" {
-		fmt.Printf("Route details      : %s\n", route.RouteOutput)
-	}
-
-	if route.IsDirect {
-		Ok("Direct local link / subnet route to target host.")
-	} else if route.Gateway != "" {
-		Info(fmt.Sprintf("Route directs via gateway: %s (Interface: %s)", route.Gateway, route.Interface))
-	}
-
-	if route.PingResponded {
-		Ok(fmt.Sprintf("Remote host answered ICMP ping in %s.", route.PingDuration.Round(time.Millisecond)))
+	if len(ips) > 0 {
+		fmt.Printf("  ✅ Local IP Candidates : %s\n", strings.Join(ips, ", "))
 	} else {
-		Warn("Remote host did not respond to ICMP ping (normal for hardened air units/autopilots).")
+		fmt.Printf("  ⚠️  Local IP Candidates : None found\n")
 	}
-}
 
-// PrintPortStatus outputs port availability and bindability.
-func PrintPortStatus(status discovery.PortStatus) {
-	Section("4. PORT STATUS & BINDABILITY")
-	if status.Available {
-		Ok(fmt.Sprintf("Port UDP %d is unowned and available for binding.", status.Port))
-	} else {
-		Fail(fmt.Sprintf("Port UDP %d has conflicts or is owned by an existing socket.", status.Port))
-		for _, s := range status.BoundSockets {
-			Info(fmt.Sprintf("Conflicting socket: %s", s.Raw))
+	// 2. Port status
+	if portStatus != nil {
+		if portStatus.Available {
+			fmt.Printf("  ✅ Port UDP %-10d : Available (No socket conflicts)\n", portStatus.Port)
+		} else {
+			fmt.Printf("  ❌ Port UDP %-10d : Conflict (In use by another process)\n", portStatus.Port)
+			for _, s := range portStatus.BoundSockets {
+				fmt.Printf("       Conflicting: %s\n", s.Raw)
+			}
 		}
 	}
 
-	if status.BindTestOk {
-		Ok(fmt.Sprintf("Local socket test bind on UDP %d succeeded.", status.Port))
+	// 3. Routing
+	if route != nil {
+		if route.IsDirect {
+			fmt.Printf("  ✅ Route to %s : Direct link via %s\n", route.TargetHost, route.Interface)
+		} else if route.Gateway != "" {
+			fmt.Printf("  ℹ️  Route to %s : Gateway %s (dev %s)\n", route.TargetHost, route.Gateway, route.Interface)
+		}
+		if route.PingResponded {
+			fmt.Printf("  ✅ Ping to %s  : Responded in %s\n", route.TargetHost, route.PingDuration.Round(time.Millisecond))
+		}
+	}
+
+	// 4. Serial candidates
+	if len(serialCandidates) > 0 {
+		fmt.Printf("  ✅ Serial Ports        : %s\n", strings.Join(serialCandidates, ", "))
 	} else {
-		Fail(fmt.Sprintf("Local socket test bind failed: %s", status.BindError))
+		fmt.Printf("  ℹ️  Serial Ports        : None detected\n")
 	}
 
-	if status.EphemeralTest != "" {
-		Ok(fmt.Sprintf("Ephemeral UDP client port allocation succeeded: %s", status.EphemeralTest))
+	// Verbose dump only if requested
+	if verbose {
+		fmt.Println("\n--- Verbose Interface & Socket Details ---")
+		for _, iface := range ifaces {
+			fmt.Printf("Interface: %s (MTU: %d, Flags: %s, Addrs: %v)\n", iface.Name, iface.MTU, iface.Flags, iface.Addresses)
+		}
+		if portStatus != nil && len(portStatus.BoundSockets) > 0 {
+			fmt.Println("Active UDP Sockets:")
+			for _, s := range portStatus.BoundSockets {
+				fmt.Println("  " + s.Raw)
+			}
+		}
 	}
 }
 
-// PrintSerialCandidates outputs discovered serial devices.
-func PrintSerialCandidates(candidates []string) {
-	Section("5. SERIAL TRANSPORT DISCOVERY")
-	if len(candidates) == 0 {
-		Info("No serial device candidates discovered on this operating system.")
-		Info("If using USB-TTL / radio, check device permissions (e.g. dialout group) or specify -serial /dev/... or COMx.")
-		return
-	}
-	for _, c := range candidates {
-		fmt.Printf("Serial candidate: %s\n", c)
-	}
-}
-
-// PrintRawPacketSummary outputs results from raw UDP listener.
-func PrintRawPacketSummary(summary *transport.PacketSummary) {
-	fmt.Printf("\n--- Raw Packet Capture Results (%s) ---\n", summary.Duration)
+// PrintRawPacketSummary outputs concise raw UDP sniffer results.
+func PrintRawPacketSummary(summary *transport.PacketSummary, verbose bool) {
+	fmt.Println("\n[2/3] Raw Packet Sniffer")
 	if summary.TotalPackets == 0 {
-		Fail("NO UDP packets received during test window.")
-		Info("Possible causes:")
-		Info("  - The remote radio / autopilot is not configured to send to this host IP/port.")
-		Info("  - A local firewall (iptables / ufw / Windows Defender) is dropping inbound UDP.")
-		Info("  - Network interface link is down or cable disconnected.")
-		Info(fmt.Sprintf("Run packet sniffer to verify wire traffic: %s", transport.FormatTcpdumpCommand(summary.Port, "")))
+		fmt.Printf("  ❌ Inbound Traffic    : 0 UDP packets on port %d (%s window)\n", summary.Port, summary.Duration)
+		fmt.Printf("     Possible causes: target host not sending to this IP/port, or firewall drop.\n")
 		return
 	}
 
-	Ok(fmt.Sprintf("Received %d raw UDP datagram(s) (%d total bytes).", summary.TotalPackets, summary.TotalBytes))
-	if summary.MAVLinkLike > 0 {
-		Ok(fmt.Sprintf("%d datagram(s) begin with MAVLink magic byte (0xFE / 0xFD).", summary.MAVLinkLike))
-	} else {
-		Warn("Packets arrived, but none began with MAVLink magic byte 0xFE or 0xFD at byte 0.")
-		Info("This strongly indicates serial-over-UDP chunk fragmentation! Air unit is splitting frames across datagrams.")
-		Info("Ensure -stream-server=true or UDP client stream mode is active.")
+	pct := 0
+	if summary.TotalPackets > 0 {
+		pct = (summary.MAVLinkLike * 100) / summary.TotalPackets
 	}
 
-	for _, s := range summary.UniqueSenders {
-		Info("Datagram sender source: " + s)
+	fmt.Printf("  ✅ Inbound Traffic    : %d UDP datagrams (%d bytes) from %s\n",
+		summary.TotalPackets, summary.TotalBytes, strings.Join(summary.UniqueSenders, ", "))
+	if summary.MAVLinkLike > 0 {
+		fmt.Printf("  ✅ MAVLink Framing    : %d%% of packets match MAVLink v1/v2 magic bytes\n", pct)
+	} else {
+		fmt.Printf("  ⚠️  MAVLink Framing    : Packets arrived without leading 0xFE/0xFD magic (chunked stream)\n")
+	}
+
+	if verbose {
+		fmt.Printf("Sample packet sizes: %v\n", summary.PacketSizes)
 	}
 }
 
-// PrintMAVLinkSummary outputs decoded MAVLink statistics and health evaluation.
-func PrintMAVLinkSummary(global metrics.GlobalMetrics, gimbal decoder.GimbalEvidence) {
-	Section("8. TELEMETRY HEALTH & LINK METRICS")
+// PrintLiveStart announces start of telemetry listening.
+func PrintLiveStart(transport, mode string, port int, address string) {
+	fmt.Println("\n[3/3] Live Telemetry Monitor")
+	if address != "" {
+		fmt.Printf("  Connecting to %s %s at %s...\n", transport, mode, address)
+	} else {
+		fmt.Printf("  Listening on %s %s 0.0.0.0:%d...\n", transport, mode, port)
+	}
+}
+
+// PrintMAVLinkSummary outputs a structured, concise table of telemetry metrics.
+func PrintMAVLinkSummary(global metrics.GlobalMetrics, gimbal decoder.GimbalEvidence, reportFile string, verbose bool) {
+	Section("TELEMETRY HEALTH & METRICS")
+
 	if global.TotalFrames == 0 {
 		Fail("No MAVLink frames were decoded during the test window.")
 		Info("Check dialect compatibility (-dialect common/ardupilotmega/all) and transport settings.")
+		if reportFile != "" {
+			fmt.Printf("\n📁 Detailed diagnostic report saved to: %s\n", reportFile)
+		}
 		return
 	}
 
-	Ok(fmt.Sprintf("Decoded %d MAVLink frame(s) across %d source(s) in %.1fs.",
-		global.TotalFrames, len(global.Sources), global.DurationSeconds))
-
-	fmt.Println("\nFrame Version Breakdown:")
-	for v, count := range global.VersionCounts {
-		fmt.Printf("  • %-16s: %d frame(s)\n", v, count)
-	}
+	Ok(fmt.Sprintf("Decoded %d frames across %d source(s) in %.1fs (%.1f msgs/s | %.1f B/s)",
+		global.TotalFrames, len(global.Sources), global.DurationSeconds, global.OverallMsgRateHz, global.OverallThroughputBps))
 
 	if global.TotalParseErrors > 0 {
-		Warn(fmt.Sprintf("Parse errors encountered: %d frame(s) failed CRC or framing check.", global.TotalParseErrors))
-	} else {
-		Ok("Zero framing/CRC parse errors detected.")
+		Warn(fmt.Sprintf("Parse errors: %d frame(s) failed CRC or framing check", global.TotalParseErrors))
 	}
 
-	fmt.Printf("\nOverall Throughput: %.1f msgs/sec | %.1f bytes/sec\n", global.OverallMsgRateHz, global.OverallThroughputBps)
+	fmt.Println()
+	fmt.Printf("%-10s %-16s %-24s %-10s %-10s %s\n",
+		"SOURCE", "COMPONENT", "TYPE / AUTOPILOT", "MSG RATE", "HB RATE", "STATUS")
+	fmt.Println(strings.Repeat("-", 80))
 
-	// Per-Source Telemetry Details
 	for _, src := range global.Sources {
-		fmt.Printf("\n------------------------------------------------------------\n")
-		fmt.Printf("Source System ID: %d | Component ID: %d (%s)\n",
-			src.SystemID, src.ComponentID, decoder.ComponentName(src.ComponentID))
-		fmt.Printf("------------------------------------------------------------\n")
-		fmt.Printf("  • Total frames received : %d\n", src.TotalFrames)
-		fmt.Printf("  • Dropped frames        : %d (Packet loss: %.2f%%)\n", src.DroppedFrames, src.PacketLossPct)
-		fmt.Printf("  • Message rate          : %.1f Hz\n", src.MsgRateHz)
-		fmt.Printf("  • Data throughput       : %.1f bytes/sec\n", src.DataRateBytesSec)
-		fmt.Printf("  • Inter-packet jitter   : %.2f ms\n", src.JitterMs)
+		compName := shortComponentName(src.ComponentID)
+		typeStr := "Telemetry"
+		hbRateStr := "n/a"
+		statusStr := fmt.Sprintf("Active (loss: %.1f%%)", src.PacketLossPct)
 
 		if src.HeartbeatStats != nil {
 			hb := src.HeartbeatStats
-			fmt.Printf("  • Heartbeats observed   : %d\n", hb.Count)
-			fmt.Printf("  • Autopilot identity    : %s\n", hb.Autopilot)
-			fmt.Printf("  • Vehicle type          : %s\n", hb.VehicleType)
-			fmt.Printf("  • System flight status  : %s\n", hb.SystemStatus)
-			fmt.Printf("  • Heartbeat frequency   : %.2f Hz (avg interval: %.1f ms, jitter: %.1f ms)\n",
-				hb.RateHz, hb.AvgIntervalMs, hb.JitterMs)
-
+			hbRateStr = fmt.Sprintf("%.2f Hz", hb.RateHz)
+			typeStr = shortTypeString(hb.VehicleType)
 			if hb.IsHealthy {
-				Ok("Heartbeat link health: HEALTHY & STABLE (regular periodic heartbeats).")
-			} else if hb.Count == 1 {
-				Warn("Heartbeat link health: UNSTABLE (only 1 heartbeat received; link may be intermittent).")
+				statusStr = fmt.Sprintf("Healthy (%s)", shortStatusString(hb.SystemStatus))
 			} else {
-				Warn(fmt.Sprintf("Heartbeat link health: IRREGULAR (interval variation: %.1f - %.1f ms).",
-					hb.MinIntervalMs, hb.MaxIntervalMs))
+				statusStr = fmt.Sprintf("Unstable (%s)", shortStatusString(hb.SystemStatus))
 			}
-		} else {
-			Warn("No HEARTBEAT message observed from this source yet.")
 		}
+
+		fmt.Printf("%-10s %-16s %-24s %-10s %-10s %s\n",
+			fmt.Sprintf("%d / %d", src.SystemID, src.ComponentID),
+			compName,
+			typeStr,
+			fmt.Sprintf("%.1f Hz", src.MsgRateHz),
+			hbRateStr,
+			statusStr,
+		)
 	}
 
-	// Gimbal Evidence Section
-	fmt.Printf("\n------------------------------------------------------------\n")
-	fmt.Println("Gimbal & Payload Subsystem Observation:")
-	fmt.Printf("------------------------------------------------------------\n")
+	// Gimbal observation
+	fmt.Println()
 	if gimbal.Observed {
-		Ok(fmt.Sprintf("Gimbal payload CONFIRMED: %s (sys=%d comp=%d)", gimbal.GimbalType, gimbal.SystemID, gimbal.ComponentID))
-		Info(fmt.Sprintf("Evidence messages: %s", strings.Join(gimbal.MessagesSeen, ", ")))
+		Ok(fmt.Sprintf("Gimbal Payload : Confirmed (%s)", strings.Join(gimbal.MessagesSeen, ", ")))
 		if gimbal.Details != "" {
-			Info("Details: " + gimbal.Details)
+			Info(gimbal.Details)
 		}
 	} else {
-		Info("No gimbal heartbeat or status messages were observed in this window.")
-		Info("Note: Gimbal absence is NOT proven; some gimbals communicate via CAN or require explicit telemetry streams.")
+		Info("Gimbal Payload : Not observed in this window (unproven)")
+	}
+
+	if reportFile != "" {
+		fmt.Printf("\n📁 Full diagnostic report exported to: %s\n", reportFile)
+	}
+	if !verbose {
+		fmt.Println("💡 Tip: Use -v / -verbose for full frame stream and raw socket dump.")
 	}
 }
 
 // PrintFinalRecommendation prints actionable configuration snippets and next steps.
 func PrintFinalRecommendation(port int) {
-	Section("9. DIAGNOSTIC RECOMMENDATIONS & NEXT STEPS")
 	fmt.Print(`
-Recommended Troubleshooting Order:
-  1. Verify the local network interface has an assigned IPv4 address in the vehicle/air unit subnet.
-  2. For UDP Air Units (SIYI, Microhard, RFD900, DoodleLabs, Herelink):
-     - If the air unit streams to your PC: use server mode with UDP stream reassembly:
-       mavlink-doctor -transport udp -mode server -port ` + fmt.Sprint(port) + ` -stream-server=true
-     - If the air unit acts as a server: connect in UDP client mode:
-       mavlink-doctor -transport udp -mode client -address <device-ip>:<device-port>
-  3. For Serial Links (USB-TTL, FTDI, Holybro, CUAV, Pixhawk TELEM):
-     mavlink-doctor -transport serial -serial /dev/ttyACM0 -baud 115200
-  4. For Telemetry Streams:
-     - GCS heartbeat is enabled by default (sys=255, comp=190).
-     - If heartbeats are received but data streams are absent, enable stream requests:
-       mavlink-doctor -request-streams=true
-  5. Packet Capture:
-     Run in another shell: ` + transport.FormatTcpdumpCommand(port, "") + `
+Troubleshooting Quick Reference:
+  • Air Unit sends to PC  : mavlink-doctor -transport udp -mode server -port ` + fmt.Sprint(port) + ` -stream-server=true
+  • Connect to Air Unit   : mavlink-doctor -transport udp -mode client -address <device-ip>:<device-port>
+  • Serial / USB-TTL Radio: mavlink-doctor -transport serial -serial /dev/ttyUSB0 -baud 57600
+  • Packet capture check  : ` + transport.FormatTcpdumpCommand(port, "") + `
 `)
+}
+
+func shortComponentName(compID uint8) string {
+	switch compID {
+	case 1:
+		return "Autopilot"
+	case 154:
+		return "Gimbal 1"
+	case 155:
+		return "Gimbal 2"
+	case 100:
+		return "Camera 1"
+	case 191:
+		return "Companion PC"
+	case 190:
+		return "GCS"
+	default:
+		return fmt.Sprintf("Component %d", compID)
+	}
+}
+
+func shortTypeString(vehType string) string {
+	if strings.Contains(vehType, "Quadrotor") {
+		return "Quadrotor"
+	}
+	if strings.Contains(vehType, "Gimbal") {
+		return "Payload Gimbal"
+	}
+	if strings.Contains(vehType, "Fixed Wing") {
+		return "Fixed Wing"
+	}
+	if strings.Contains(vehType, "Hexarotor") {
+		return "Hexarotor"
+	}
+	if len(vehType) > 22 {
+		return vehType[:22]
+	}
+	return vehType
+}
+
+func shortStatusString(status string) string {
+	if strings.Contains(status, "STANDBY") {
+		return "STANDBY"
+	}
+	if strings.Contains(status, "ACTIVE") {
+		return "ACTIVE"
+	}
+	if strings.Contains(status, "UNINIT") {
+		return "UNINIT"
+	}
+	if strings.Contains(status, "BOOT") {
+		return "BOOT"
+	}
+	return status
 }
