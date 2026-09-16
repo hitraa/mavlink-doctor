@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/khairnar2960/mavlink-doctor/internal/decoder"
+	"github.com/hitraa/mavlink-doctor/internal/decoder"
 )
 
 // PacketSummary stores raw observation metrics from the raw UDP socket listener.

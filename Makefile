@@ -1,5 +1,5 @@
 APP := mavlink-doctor
-MODULE := github.com/khairnar2960/mavlink-doctor
+MODULE := github.com/hitraa/mavlink-doctor
 BIN_DIR := bin
 DIST_DIR := dist
 

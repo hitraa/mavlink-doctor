@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 APP="mavlink-doctor"
 DIST="dist"
-MODULE="github.com/khairnar2960/mavlink-doctor"
+MODULE="github.com/hitraa/mavlink-doctor"
 
 mkdir -p "$DIST"
 

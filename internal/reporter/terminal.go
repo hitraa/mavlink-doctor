@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/khairnar2960/mavlink-doctor/internal/decoder"
-	"github.com/khairnar2960/mavlink-doctor/internal/discovery"
-	"github.com/khairnar2960/mavlink-doctor/internal/metrics"
-	"github.com/khairnar2960/mavlink-doctor/internal/transport"
+	"github.com/hitraa/mavlink-doctor/internal/decoder"
+	"github.com/hitraa/mavlink-doctor/internal/discovery"
+	"github.com/hitraa/mavlink-doctor/internal/metrics"
+	"github.com/hitraa/mavlink-doctor/internal/transport"
 )
 
 // Section prints a formatted section banner.

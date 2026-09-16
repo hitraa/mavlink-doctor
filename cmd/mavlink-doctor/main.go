@@ -13,13 +13,13 @@ import (
 
 	"github.com/bluenviron/gomavlib/v4"
 	"github.com/bluenviron/gomavlib/v4/pkg/dialects/common"
-	"github.com/khairnar2960/mavlink-doctor/internal/cli"
-	"github.com/khairnar2960/mavlink-doctor/internal/decoder"
-	"github.com/khairnar2960/mavlink-doctor/internal/discovery"
-	"github.com/khairnar2960/mavlink-doctor/internal/metrics"
-	"github.com/khairnar2960/mavlink-doctor/internal/reporter"
-	"github.com/khairnar2960/mavlink-doctor/internal/transport"
-	"github.com/khairnar2960/mavlink-doctor/internal/version"
+	"github.com/hitraa/mavlink-doctor/internal/cli"
+	"github.com/hitraa/mavlink-doctor/internal/decoder"
+	"github.com/hitraa/mavlink-doctor/internal/discovery"
+	"github.com/hitraa/mavlink-doctor/internal/metrics"
+	"github.com/hitraa/mavlink-doctor/internal/reporter"
+	"github.com/hitraa/mavlink-doctor/internal/transport"
+	"github.com/hitraa/mavlink-doctor/internal/version"
 )
 
 func main() {

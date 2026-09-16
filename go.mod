@@ -1,4 +1,4 @@
-module github.com/khairnar2960/mavlink-doctor
+module github.com/hitraa/mavlink-doctor
 
 go 1.25.0
 

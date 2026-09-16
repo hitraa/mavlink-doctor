@@ -6,11 +6,11 @@ import (
 	"io"
 	"os"
 
-	"github.com/khairnar2960/mavlink-doctor/internal/decoder"
-	"github.com/khairnar2960/mavlink-doctor/internal/discovery"
-	"github.com/khairnar2960/mavlink-doctor/internal/metrics"
-	"github.com/khairnar2960/mavlink-doctor/internal/transport"
-	"github.com/khairnar2960/mavlink-doctor/internal/version"
+	"github.com/hitraa/mavlink-doctor/internal/decoder"
+	"github.com/hitraa/mavlink-doctor/internal/discovery"
+	"github.com/hitraa/mavlink-doctor/internal/metrics"
+	"github.com/hitraa/mavlink-doctor/internal/transport"
+	"github.com/hitraa/mavlink-doctor/internal/version"
 )
 
 // DiagnosticResult encapsulates the complete diagnostic execution outcome.

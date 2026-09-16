@@ -27,11 +27,11 @@ builds:
         goarch: arm
     ldflags:
       - -s -w
-      - -X github.com/khairnar2960/mavlink-doctor/internal/version.Version={{.Version}}
-      - -X github.com/khairnar2960/mavlink-doctor/internal/version.Commit={{.Commit}}
-      - -X github.com/khairnar2960/mavlink-doctor/internal/version.BuildDate={{.Date}}
-      - -X github.com/khairnar2960/mavlink-doctor/internal/version.Build={{.Tag}}
-      - -X github.com/khairnar2960/mavlink-doctor/internal/version.GoVersion={{.Env.GOVERSION}}
+      - -X github.com/hitraa/mavlink-doctor/internal/version.Version={{.Version}}
+      - -X github.com/hitraa/mavlink-doctor/internal/version.Commit={{.Commit}}
+      - -X github.com/hitraa/mavlink-doctor/internal/version.BuildDate={{.Date}}
+      - -X github.com/hitraa/mavlink-doctor/internal/version.Build={{.Tag}}
+      - -X github.com/hitraa/mavlink-doctor/internal/version.GoVersion={{.Env.GOVERSION}}
 
 archives:
   - id: default

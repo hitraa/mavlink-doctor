@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-09-16
 
 ### Features
+
 - **core**: Modular production-grade architecture decoupling discovery, transport, decoders, metrics, reporters, and simulator into clean internal packages.
 - **discovery**: Cross-platform network interface scanning, IPv4/IPv6 candidate resolution, and MTU extraction.
 - **discovery**: Multi-OS UDP socket ownership inspection supporting Linux (`ss`), macOS (`lsof`), and Windows (`netstat`).

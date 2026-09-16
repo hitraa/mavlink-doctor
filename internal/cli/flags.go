@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/khairnar2960/mavlink-doctor/internal/version"
+	"github.com/hitraa/mavlink-doctor/internal/version"
 )
 
 const (
