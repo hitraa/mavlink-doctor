@@ -140,8 +140,7 @@ func PrintSerialCandidates(candidates []string) {
 
 // PrintRawPacketSummary outputs results from raw UDP listener.
 func PrintRawPacketSummary(summary *transport.PacketSummary) {
-	Section("6. RAW UDP PACKET SNIFFER")
-	fmt.Printf("Listen Target: %s:%d (Duration: %s)\n\n", summary.ListenAddress, summary.Port, summary.Duration)
+	fmt.Printf("\n--- Raw Packet Capture Results (%s) ---\n", summary.Duration)
 	if summary.TotalPackets == 0 {
 		Fail("NO UDP packets received during test window.")
 		Info("Possible causes:")
@@ -168,7 +167,7 @@ func PrintRawPacketSummary(summary *transport.PacketSummary) {
 
 // PrintMAVLinkSummary outputs decoded MAVLink statistics and health evaluation.
 func PrintMAVLinkSummary(global metrics.GlobalMetrics, gimbal decoder.GimbalEvidence) {
-	Section("7. MAVLINK TELEMETRY & LINK METRICS")
+	Section("8. TELEMETRY HEALTH & LINK METRICS")
 	if global.TotalFrames == 0 {
 		Fail("No MAVLink frames were decoded during the test window.")
 		Info("Check dialect compatibility (-dialect common/ardupilotmega/all) and transport settings.")
@@ -243,7 +242,7 @@ func PrintMAVLinkSummary(global metrics.GlobalMetrics, gimbal decoder.GimbalEvid
 
 // PrintFinalRecommendation prints actionable configuration snippets and next steps.
 func PrintFinalRecommendation(port int) {
-	Section("8. DIAGNOSTIC RECOMMENDATIONS & NEXT STEPS")
+	Section("9. DIAGNOSTIC RECOMMENDATIONS & NEXT STEPS")
 	fmt.Print(`
 Recommended Troubleshooting Order:
   1. Verify the local network interface has an assigned IPv4 address in the vehicle/air unit subnet.
