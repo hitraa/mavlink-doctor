@@ -1,0 +1,78 @@
+version: 2
+
+project_name: mavlink-doctor
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: mavlink-doctor
+    main: ./cmd/mavlink-doctor
+    binary: mavlink-doctor
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "7"
+    ignore:
+      - goos: windows
+        goarch: arm
+    ldflags:
+      - -s -w
+      - -X github.com/khairnar2960/mavlink-doctor/internal/version.Version={{.Version}}
+      - -X github.com/khairnar2960/mavlink-doctor/internal/version.Commit={{.Commit}}
+      - -X github.com/khairnar2960/mavlink-doctor/internal/version.BuildDate={{.Date}}
+      - -X github.com/khairnar2960/mavlink-doctor/internal/version.Build={{.Tag}}
+      - -X github.com/khairnar2960/mavlink-doctor/internal/version.GoVersion={{.Env.GOVERSION}}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: "SHA256SUMS"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: "🚀 Features"
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "🐛 Bug Fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: "📝 Documentation"
+      regexp: '^.*?docs?(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: "⚡ Performance Improvements"
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: "🔄 Refactoring"
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      order: 4
+    - title: "🧪 Testing"
+      regexp: '^.*?test(\([[:word:]]+\))??!?:.+$'
+      order: 5
+    - title: "🔧 Build & CI/CD"
+      regexp: '^.*?(ci|build|chore)(\([[:word:]]+\))??!?:.+$'
+      order: 6
+    - title: "Other Changes"
+      order: 999

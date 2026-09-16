@@ -1,0 +1,163 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Changelog with git-cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Compute Version Metadata
+        id: version
+        shell: bash
+        run: |
+          TAG=$(git describe --tags --abbrev=0)
+          BUILD=$(git describe --tags --always --dirty)
+          COMMITS=$(git rev-list ${TAG}..HEAD --count)
+
+          if [ "$COMMITS" -eq 0 ]; then
+            VERSION="$TAG"
+          else
+            VERSION="${TAG}-dev"
+          fi
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD=$BUILD" >> $GITHUB_ENV
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+          echo "GOVERSION=$(go version | awk '{print $3}')" >> $GITHUB_ENV
+
+      - name: Build Binary
+        shell: bash
+        run: |
+          APP=mavlink-doctor
+          MODULE=github.com/khairnar2960/mavlink-doctor
+          mkdir -p dist
+
+          EXT=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            EXT=".exe"
+          fi
+
+          OUT="${APP}_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}${EXT}"
+
+          CGO_ENABLED=0 \
+          GOOS=${{ matrix.goos }} \
+          GOARCH=${{ matrix.goarch }} \
+          go build \
+            -trimpath \
+            -ldflags="
+              -s -w
+              -X '${MODULE}/internal/version.Version=${VERSION}'
+              -X '${MODULE}/internal/version.Build=${BUILD}'
+              -X '${MODULE}/internal/version.Commit=${COMMIT}'
+              -X '${MODULE}/internal/version.BuildDate=${DATE}'
+              -X '${MODULE}/internal/version.GoVersion=${GOVERSION}'
+            " \
+            -o "dist/${OUT}" \
+            ./cmd/mavlink-doctor
+
+      - name: Package Archives
+        shell: bash
+        run: |
+          cd dist
+          FILE=$(find . -maxdepth 1 -type f -printf '%f\n')
+
+          if [[ "$FILE" == *.exe ]]; then
+            zip "${FILE%.exe}.zip" "$FILE"
+            rm "$FILE"
+          else
+            tar czf "${FILE}.tar.gz" "$FILE"
+            rm "$FILE"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+
+      - name: Upload Release Notes
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          pattern: "*"
+          merge-multiple: false
+
+      - name: Download Release Notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: .
+
+      - name: Generate Checksums
+        shell: bash
+        run: |
+          find release -type f \
+            \( -name "*.tar.gz" -o -name "*.zip" \) \
+            -exec sha256sum {} \; \
+            | sed 's#release/[^/]*/##' \
+            > SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+          files: |
+            release/**/*
+            SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
