@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -213,7 +214,7 @@ func TestJSONReportAndRedaction(t *testing.T) {
 		t.Fatalf("expected status MAVLINK_CONNECTED, got %s", res.Status)
 	}
 
-	reportFile := "/tmp/mavlink_doctor_test_report.json"
+	reportFile := filepath.Join(t.TempDir(), "mavlink_doctor_test_report.json")
 	err := reporter.ExportSupportReport(reportFile, res, true)
 	if err != nil {
 		t.Fatalf("failed to export report: %v", err)
