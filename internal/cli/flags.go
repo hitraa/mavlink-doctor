@@ -61,10 +61,24 @@ func ParseFlags(args []string) (*Config, error) {
 	probeSubnet := fs.String("probe-subnet", "", "Opt-in bounded subnet probe for active MAVLink endpoints (e.g. 192.168.1.0/24)")
 
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "mavlink-doctor - Hardware-agnostic MAVLink diagnostics & telemetry metrics utility\n\n")
-		fmt.Fprintf(os.Stderr, "Usage: mavlink-doctor [options]\n\n")
-		fmt.Fprintf(os.Stderr, "Options:\n")
+		fmt.Fprintf(os.Stdout, "mavlink-doctor - Hardware-agnostic MAVLink diagnostics & telemetry metrics utility\n\n")
+		fmt.Fprintf(os.Stdout, "Usage: mavlink-doctor [options]\n\n")
+		fmt.Fprintf(os.Stdout, "Commands:\n")
+		fmt.Fprintf(os.Stdout, "  version      Print version information and exit\n")
+		fmt.Fprintf(os.Stdout, "  help         Print this help message and exit\n\n")
+		fmt.Fprintf(os.Stdout, "Options:\n")
+		fs.SetOutput(os.Stdout)
 		fs.PrintDefaults()
+	}
+
+	if len(args) > 0 {
+		switch args[0] {
+		case "help":
+			fs.Usage()
+			return nil, flag.ErrHelp
+		case "version":
+			return &Config{ShowVersion: true}, nil
+		}
 	}
 
 	if err := fs.Parse(args); err != nil {

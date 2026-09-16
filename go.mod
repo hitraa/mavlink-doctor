@@ -1,6 +1,6 @@
 module github.com/khairnar2960/mavlink-doctor
 
-go 1.26.3
+go 1.25.0
 
 require github.com/bluenviron/gomavlib/v4 v4.0.0
 
